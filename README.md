@@ -36,18 +36,18 @@ Buka terminal di folder project dan jalankan perintah berikut untuk mengkompilas
 
 Gunakan mode encode untuk menyisipkan pesan.
 Format:
-`./stego encode <input.bmp> <output.bmp> "Pesan Rahasia"`
+`./stego.exe encode <input.bmp> <output.bmp> "Pesan Rahasia"`
 
 Contoh:
 
-    ./stego encode image.bmp result.bmp "This is Secret"
+    ./stego.exe encode image.bmp result.bmp "This is Secret"
 
 3. Membaca Pesan (Decode)
 
 Gunakan mode decode untuk mengekstrak pesan dari gambar yang sudah disisipi.
 Format:
-`./stego decode <gambar_rahasia.bmp>`
+`./stego.exe decode <gambar_rahasia.bmp>`
 
 Contoh:
 
-    ./stego decode result.bmp
+    ./stego.exe decode result.bmp
