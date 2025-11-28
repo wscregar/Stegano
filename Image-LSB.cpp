@@ -9,7 +9,7 @@
 const int BMP_HEADER_SIZE = 54;
 
 /**
- * @brief Membaca seluruh isi file ke dalam vector byte.
+Membaca seluruh isi file ke dalam vector byte.
  */
 std::vector<uint8_t> read_file(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
@@ -28,7 +28,7 @@ std::vector<uint8_t> read_file(const std::string& filename) {
 }
 
 /**
- * @brief Menulis vector byte ke file baru.
+Menulis vector byte ke file baru.
  */
 void write_file(const std::string& filename, const std::vector<uint8_t>& data) {
     std::ofstream file(filename, std::ios::binary);
@@ -39,7 +39,7 @@ void write_file(const std::string& filename, const std::vector<uint8_t>& data) {
 }
 
 /**
- * @brief Menyisipkan pesan ke dalam data gambar BMP menggunakan teknik LSB.
+Menyisipkan pesan ke dalam data gambar BMP menggunakan teknik LSB.
  */
 void encode_bmp(const std::string& input_bmp, const std::string& output_bmp, std::string message) {
     std::cout << "Membaca gambar sumber...\n";
@@ -96,7 +96,7 @@ void encode_bmp(const std::string& input_bmp, const std::string& output_bmp, std
 }
 
 /**
- * @brief Mengekstrak pesan dari gambar BMP LSB.
+Mengekstrak pesan dari gambar BMP LSB.
  */
 void decode_bmp(const std::string& input_bmp) {
     std::vector<uint8_t> img_data = read_file(input_bmp);
@@ -147,6 +147,10 @@ void decode_bmp(const std::string& input_bmp) {
     std::cout << "=====================\n";
 }
 
+
+/**
+Panduan untuk penggunaan.
+ */
 void print_usage(const char* prog_name) {
     std::cerr << "Penggunaan:\n";
     std::cerr << "  " << prog_name << " encode <input.bmp> <output.bmp> \"Pesan Rahasia\"\n";
@@ -190,4 +194,5 @@ int main(int argc, char* argv[]) {
     }
 
     return 0;
+
 }
