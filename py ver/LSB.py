@@ -1,29 +1,25 @@
 from PIL import Image
 import sys
 import os
+import hashlib
 
 # --- UTILITY FUNCTIONS ---
 
 def text_to_bits(text):
     """Mengubah string teks menjadi string bit."""
-    # Mengubah setiap karakter menjadi representasi ASCII/Unicode, lalu ke biner 8 bit
     bits = [bin(ord(c))[2:].zfill(8) for c in text]
     return "".join(bits)
 
 def bits_to_text(bits):
     """Mengubah string bit menjadi string teks."""
-    # Pastikan panjang string bit adalah kelipatan 8
     if len(bits) % 8 != 0:
-        bits = bits[:-(len(bits) % 8)] # Truncate jika ada sisa
+        bits = bits[:-(len(bits) % 8)]
     
-    # Memproses setiap 8 bit untuk membentuk satu karakter
     text = ""
     for i in range(0, len(bits), 8):
         byte = bits[i:i+8]
-        # Mengonversi biner 8-bit ke integer, lalu ke karakter
         text += chr(int(byte, 2))
     return text
-
 
 def get_max_capacity(input_img_path):
     """
@@ -31,25 +27,15 @@ def get_max_capacity(input_img_path):
     """
     try:
         img = Image.open(input_img_path)
-        # pastikan gambar dalam mode RGB untuk 3 byte per pixel
-        # pakai RGB agar kelihatan lebih tersembunyi 
         if img.mode != 'RGB':
             img = img.convert('RGB')
             
         width, height = img.size
-        
-        # total bit yang tersedia (3 komponen warna * 1 bit/komponen)
         total_available_bits = width * height * 3
-        
-        # kapasitas dalam karakter (8 bit per karakter)
         max_capacity_chars = total_available_bits // 8
+        effective_capacity = max_capacity_chars - 1
         
-        # pesan encoding harus diakhiri dengan null terminator ('\0') agar tidak menghasilkan noise
-        # null terminator juga memakan 1 karakter (8 bit).
-        # kapasitas efektif = kapasitas total - 1 (untuk null terminator).
-        effective_capacity = max_capacity_chars - 1 
-        
-        return max(0, effective_capacity) # memastikan hasil tidak negatif
+        return max(0, effective_capacity)
         
     except FileNotFoundError:
         print(f"Error: File tidak ditemukan di path: {input_img_path}")
@@ -58,156 +44,349 @@ def get_max_capacity(input_img_path):
         print(f"Error saat menghitung kapasitas: {e}")
         return 0
 
-def encode_image(input_img_path, output_img_path, message):
+def generate_watermark_hash(text, max_bits):
     """
-    Menyisipkan pesan ke dalam gambar menggunakan LSB.
-    Bekerja dengan format lossless seperti BMP atau PNG.
+    Generate SHA512 hash from text and repeat it to fill max_bits.
+    Returns bit string of the repeated hash.
+    """
+    # Generate SHA512 hash from input text
+    sha512_hash = hashlib.sha512(text.encode()).hexdigest()
+    print(f"SHA512 Hash (hex): {sha512_hash}")
+    
+    # Convert hex hash to binary string
+    hash_bits = bin(int(sha512_hash, 16))[2:].zfill(512)  # SHA512 produces 512 bits
+    
+    # Repeat the hash to fill the required bits
+    repeated_hash = ""
+    while len(repeated_hash) < max_bits:
+        repeated_hash += hash_bits
+    
+    # Trim to exact required length
+    return repeated_hash[:max_bits]
+
+def embed_watermark(input_img_path, output_img_path, watermark_text):
+    """
+    Embed a digital watermark by repeating SHA512 hash throughout the image.
     """
     try:
         print("Membaca gambar sumber...")
         img = Image.open(input_img_path).convert("RGB")
         width, height = img.size
         
-        # tambahkan null terminator '\0' ke pesan
-        message_with_terminator = message + '\0'
-        
-        # ubah pesan menjadi string bit (setiap karakter 8 bit)
-        bit_message = text_to_bits(message_with_terminator)
-        message_length = len(bit_message)
-        
-        # hitung kapasitas: 1 pixel (3 byte RGB) dapat menyimpan 3 bit.
-        # per bit pesan menggunakan 1 byte 
-        # Total byte pixel yang tersedia adalah (width * height * 3)
-        max_capacity_bits = width * height * 3 
-
-        # karenamenggunakan satu byte gambar untuk satu bit pesan:
-        # kapasitas bit yang sebenarnya adalah total byte gambar.
-        # total pixel = width * height. total byte = Total pixel * 3 (RGB).
+        # Calculate maximum capacity in bits
         max_capacity_bits = width * height * 3
         
-        if message_length > max_capacity_bits:
-            raise ValueError(f"Pesan terlalu panjang! Kapasitas maks: {max_capacity_bits // 8} karakter.")
-
-        print(f"Pesan: {len(message)} karakter ({message_length} bit)")
-        print(f"Kapasitas Maksimal: {max_capacity_bits // 8} karakter.")
-        print("Menyisipkan pesan...")
-
-        # dapatkan data pixel dalam bentuk list
-        pixel_data = list(img.getdata())
-        data_index = 0
-        bit_index = 0
+        print(f"Generating watermark from: '{watermark_text}'")
+        print(f"Kapasitas Maksimal Bit: {max_capacity_bits} bit")
         
-        # list baru untuk menyimpan pixel yang sudah dimodifikasi
+        # Generate repeated hash bits
+        watermark_bits = generate_watermark_hash(watermark_text, max_capacity_bits)
+        
+        # Get pixel data
+        pixel_data = list(img.getdata())
+        bit_index = 0
         new_pixel_data = []
-
-        # loop melalui setiap pixel (r, g, b)
+        
+        print("Menyisipkan watermark...")
+        
+        # Loop through each pixel
         for r, g, b in pixel_data:
-            if bit_index < message_length:
-                # modifikasi LSB dari komponen Merah (R)
-                # ambil bit pesan (0 atau 1)
-                msg_bit = int(bit_message[bit_index])
-                # bersihkan LSB byte R (r & ~1 atau r & 0xFE), lalu masukkan bit pesan (r | msg_bit)
+            if bit_index < len(watermark_bits):
+                # Modify LSB of Red component
+                msg_bit = int(watermark_bits[bit_index])
                 r = (r & 0xFE) | msg_bit
                 bit_index += 1
             
-            if bit_index < message_length:
-                # modifikasi LSB dari komponen Hijau (G)
-                msg_bit = int(bit_message[bit_index])
+            if bit_index < len(watermark_bits):
+                # Modify LSB of Green component
+                msg_bit = int(watermark_bits[bit_index])
                 g = (g & 0xFE) | msg_bit
                 bit_index += 1
 
-            if bit_index < message_length:
-                # modifikasi LSB dari komponen Biru (B)
-                msg_bit = int(bit_message[bit_index])
+            if bit_index < len(watermark_bits):
+                # Modify LSB of Blue component
+                msg_bit = int(watermark_bits[bit_index])
                 b = (b & 0xFE) | msg_bit
                 bit_index += 1
             
             new_pixel_data.append((r, g, b))
             
-            if bit_index >= message_length:
-                break # Pesan selesai disisipkan
-
-        # Tambahkan sisa pixel yang tidak dimodifikasi
+            if bit_index >= len(watermark_bits):
+                break
+        
+        # Add remaining unmodified pixels
         new_pixel_data.extend(pixel_data[len(new_pixel_data):])
         
-        # Buat gambar baru dari data pixel yang telah dimodifikasi
-        stego_img = Image.new(img.mode, img.size)
-        stego_img.putdata(new_pixel_data)
+        # Create new image with embedded watermark
+        watermarked_img = Image.new(img.mode, img.size)
+        watermarked_img.putdata(new_pixel_data)
         
         print(f"Menulis ke {output_img_path}...")
-        stego_img.save(output_img_path)
-        print("Sukses! Pesan tersimpan.")
-
+        watermarked_img.save(output_img_path)
+        print("Sukses! Watermark tersimpan.")
+        
+        # Return the original hash for verification purposes
+        original_hash = hashlib.sha512(watermark_text.encode()).hexdigest()
+        return original_hash
+        
     except Exception as e:
-        print(f"Error pada encoding: {e}")
+        print(f"Error pada embedding watermark: {e}")
+        return None
 
-
-def decode_image(input_img_path):
+def extract_watermark_hash(input_img_path):
     """
-    Mengekstrak pesan dari gambar LSB.
+    Extract the repeated hash bits from the watermarked image.
+    Returns the extracted bits as a string.
     """
     try:
-        print("Membaca gambar dengan pesan rahasia...")
+        print("Membaca gambar dengan watermark...")
         img = Image.open(input_img_path).convert("RGB")
+        width, height = img.size
         
-        # Dapatkan data pixel
+        # Calculate maximum capacity in bits
+        max_capacity_bits = width * height * 3
+        
+        # Get pixel data
         pixel_data = list(img.getdata())
         
         extracted_bits = ""
-        null_terminator_bits = text_to_bits('\0') # 8 bit null terminator
+        bit_index = 0
         
-        print("Mencoba mendekode pesan...")
-
-        # Loop melalui setiap pixel dan setiap komponen warna (R, G, B)
+        print("Mengekstrak watermark hash...")
+        
+        # Loop through each pixel
         for r, g, b in pixel_data:
-            # Ekstraksi LSB dari R: (r & 1)
+            if bit_index >= max_capacity_bits:
+                break
+                
+            # Extract LSB from Red component
             extracted_bits += str(r & 1)
+            bit_index += 1
             
-            # Cek apakah 8 bit (satu karakter) telah terkumpul
-            if len(extracted_bits) % 8 == 0:
-                last_char_bits = extracted_bits[-8:]
-                if last_char_bits == null_terminator_bits:
-                    # Hapus null terminator dan hentikan loop
-                    extracted_text = bits_to_text(extracted_bits[:-8])
-                    print("\n=== Pesan Rahasia ===")
-                    print(extracted_text)
-                    print("=====================\n")
-                    return
-
-            # Ekstraksi LSB dari G: (g & 1)
+            if bit_index >= max_capacity_bits:
+                break
+                
+            # Extract LSB from Green component
             extracted_bits += str(g & 1)
-            if len(extracted_bits) % 8 == 0:
-                last_char_bits = extracted_bits[-8:]
-                if last_char_bits == null_terminator_bits:
-                    extracted_text = bits_to_text(extracted_bits[:-8])
-                    print("\n=== Pesan Rahasia ===")
-                    print(extracted_text)
-                    print("=====================\n")
-                    return
+            bit_index += 1
             
-            # Ekstraksi LSB dari B: (b & 1)
+            if bit_index >= max_capacity_bits:
+                break
+                
+            # Extract LSB from Blue component
             extracted_bits += str(b & 1)
-            if len(extracted_bits) % 8 == 0:
-                last_char_bits = extracted_bits[-8:]
-                if last_char_bits == null_terminator_bits:
-                    extracted_text = bits_to_text(extracted_bits[:-8])
-                    print("\n=== Pesan Rahasia ===")
-                    print(extracted_text)
-                    print("=====================\n")
-                    return
+            bit_index += 1
         
-        print("Pesan tidak ditemukan (Null terminator tidak tercapai).")
-
+        # Since we fill the entire image, we get all bits
+        print(f"Berhasil mengekstrak {len(extracted_bits)} bit")
+        
+        # The first 512 bits should be the hash (repeated)
+        if len(extracted_bits) >= 512:
+            first_hash_bits = extracted_bits[:512]
+            # Convert bits to hex for display
+            hash_hex = hex(int(first_hash_bits, 2))[2:].zfill(128)
+            return extracted_bits, hash_hex
+        else:
+            return extracted_bits, None
+            
     except Exception as e:
-        print(f"Error pada decoding: {e}")
+        print(f"Error pada ekstraksi watermark: {e}")
+        return None, None
+
+def verify_watermark_comprehensive(input_img_path, watermark_text):
+    """
+    Verify if the watermark in the image matches the given text.
+    Check ALL repeated hash instances throughout the image.
+    """
+    try:
+        print(f"Memverifikasi watermark dengan teks: '{watermark_text}'")
+        
+        # Generate expected hash from the provided text
+        expected_hash = hashlib.sha512(watermark_text.encode()).hexdigest()
+        expected_bits = bin(int(expected_hash, 16))[2:].zfill(512)
+        
+        print(f"Hash yang diharapkan (hex): {expected_hash}")
+        print(f"Hash yang diharapkan (panjang bit): {len(expected_bits)} bit")
+        
+        # Extract all bits from image
+        extracted_bits, extracted_hex = extract_watermark_hash(input_img_path)
+        
+        if not extracted_bits:
+            print("Gagal mengekstrak watermark dari gambar.")
+            return False
+        
+        total_bits = len(extracted_bits)
+        print(f"Total bit yang diekstrak: {total_bits}")
+        
+        # Calculate how many complete hash blocks we have
+        num_blocks = total_bits // 512
+        print(f"Jumlah blok hash 512-bit yang dapat diperiksa: {num_blocks}")
+        
+        if num_blocks == 0:
+            print("ERROR: Gambar tidak mengandung cukup data untuk satu hash lengkap!")
+            return False
+        
+        # Analyze each hash block
+        mismatched_blocks = 0
+        corruption_report = []
+        
+        for block_num in range(num_blocks):
+            start_idx = block_num * 512
+            end_idx = start_idx + 512
+            block_bits = extracted_bits[start_idx:end_idx]
+            
+            # Compare this block with expected hash
+            if block_bits == expected_bits:
+                # Perfect match
+                pass
+            else:
+                mismatched_blocks += 1
+                
+                # Calculate bit error rate for this block
+                errors = sum(1 for i in range(512) if block_bits[i] != expected_bits[i])
+                error_percentage = (errors / 512) * 100
+                
+                # Store corruption info
+                corruption_info = {
+                    'block': block_num,
+                    'errors': errors,
+                    'error_percentage': error_percentage,
+                    'position': f"Bit {start_idx}-{end_idx-1}"
+                }
+                corruption_report.append(corruption_info)
+                
+                if block_num == 0:
+                    print(f"  Blok #{block_num}: {errors} bit berbeda ({error_percentage:.2f}%)")
+        
+        # Calculate overall statistics
+        total_possible_matches = num_blocks
+        matched_blocks = num_blocks - mismatched_blocks
+        match_percentage = (matched_blocks / num_blocks) * 100
+        
+        print(f"\n=== HASIL VERIFIKASI KOMPREHENSIF ===")
+        print(f"Total blok hash: {num_blocks}")
+        print(f"Blok yang cocok: {matched_blocks}")
+        print(f"Blok yang tidak cocok: {mismatched_blocks}")
+        print(f"Persentase kecocokan: {match_percentage:.2f}%")
+        
+        if mismatched_blocks == 0:
+            print("\n=== VERIFIKASI BERHASIL 100% ===")
+            print("SEMUA instance hash cocok dengan watermark yang diberikan.")
+            print("Gambar tidak terdeteksi mengalami modifikasi.")
+            print("===================================\n")
+            return True
+        elif match_percentage > 80:  # Threshold for partial match
+            print(f"\n=== VERIFIKASI SEBAGIAN ({match_percentage:.2f}%) ===")
+            print(f"Watermark terdeteksi tetapi gambar mungkin telah dimodifikasi.")
+            print(f"{mismatched_blocks} dari {num_blocks} blok hash rusak.")
+            print("========================================\n")
+            
+            # Show details of corruption if there are few blocks
+            if mismatched_blocks <= 10:
+                print("Detail blok yang rusak:")
+                for corrupt in corruption_report[:10]:  # Show first 10
+                    print(f"  Blok #{corrupt['block']}: {corrupt['errors']} bit error ({corrupt['error_percentage']:.2f}%) pada {corrupt['position']}")
+                if mismatched_blocks > 10:
+                    print(f"  ... dan {mismatched_blocks - 10} blok lainnya")
+            return "partial"
+        else:
+            print(f"\n=== VERIFIKASI GAGAL ===")
+            print(f"Hanya {match_percentage:.2f}% watermark yang cocok.")
+            print("Gambar mungkin bukan gambar asli atau telah sangat dimodifikasi.")
+            print("==========================\n")
+            
+            # Show corruption details for debugging
+            if corruption_report:
+                print("Contoh blok yang rusak (maks 5):")
+                for corrupt in corruption_report[:5]:
+                    print(f"  Blok #{corrupt['block']}: {corrupt['errors']} bit error ({corrupt['error_percentage']:.2f}%)")
+            return False
+            
+    except Exception as e:
+        print(f"Error pada verifikasi watermark: {e}")
+        return False
+
+def analyze_watermark_integrity(input_img_path):
+    """
+    Analyze the watermark integrity without knowing the expected text.
+    Check for consistency of repeated patterns.
+    """
+    try:
+        print("Menganalisis integritas watermark...")
+        
+        # Extract all bits from image
+        extracted_bits, extracted_hex = extract_watermark_hash(input_img_path)
+        
+        if not extracted_bits:
+            print("Gagal mengekstrak watermark dari gambar.")
+            return
+        
+        total_bits = len(extracted_bits)
+        num_blocks = total_bits // 512
+        
+        if num_blocks < 2:
+            print("Tidak cukup data untuk analisis konsistensi (minimal 2 blok hash diperlukan).")
+            return
+        
+        print(f"Menganalisis {num_blocks} blok hash 512-bit...")
+        
+        # Compare each block with the first block
+        first_block = extracted_bits[:512]
+        inconsistencies = []
+        
+        for block_num in range(1, num_blocks):
+            start_idx = block_num * 512
+            end_idx = start_idx + 512
+            block_bits = extracted_bits[start_idx:end_idx]
+            
+            if block_bits != first_block:
+                errors = sum(1 for i in range(512) if block_bits[i] != first_block[i])
+                error_percentage = (errors / 512) * 100
+                inconsistencies.append({
+                    'block': block_num,
+                    'errors': errors,
+                    'error_percentage': error_percentage
+                })
+        
+        print(f"\n=== ANALISIS INTEGRITAS WATERMARK ===")
+        print(f"Total blok hash: {num_blocks}")
+        print(f"Blok yang konsisten dengan blok pertama: {num_blocks - len(inconsistencies)}")
+        print(f"Blok yang tidak konsisten: {len(inconsistencies)}")
+        
+        if len(inconsistencies) == 0:
+            print("✓ SEMUA blok hash identik. Watermark konsisten di seluruh gambar.")
+            print("  Hash pertama (hex):", hex(int(first_block, 2))[2:].zfill(128)[:32] + "...")
+        else:
+            print("✗ Ditemukan inkonsistensi dalam watermark!")
+            print(f"  {len(inconsistencies)} blok berbeda dari blok pertama.")
+            
+            # Show summary of inconsistencies
+            max_errors = max(incons['errors'] for incons in inconsistencies)
+            avg_errors = sum(incons['errors'] for incons in inconsistencies) / len(inconsistencies)
+            print(f"  Rata-rata error per blok: {avg_errors:.1f} bit")
+            print(f"  Error maksimum: {max_errors} bit")
+            
+            # Suggest possible issues
+            if max_errors > 400:
+                print("\n  KEMUNGKINAN: Gambar mungkin tidak memiliki watermark yang valid")
+            elif max_errors > 100:
+                print("\n  KEMUNGKINAN: Bagian gambar mungkin telah dimodifikasi secara signifikan")
+            else:
+                print("\n  KEMUNGKINAN: Noise atau kompresi mungkin mempengaruhi watermark")
+        
+        print("======================================\n")
+        
+    except Exception as e:
+        print(f"Error pada analisis integritas: {e}")
 
 # --- MAIN EXECUTION ---
 
 def print_usage(prog_name):
     print("Penggunaan:")
-    print(f"  python {prog_name} encode <input.png/bmp> <output.png/bmp> \"Pesan Rahasia\"")
-    print(f"  python {prog_name} decode <input_with_secret.png/bmp>")
     print(f"  python {prog_name} capacity <input.png/bmp>")
+    print(f"  python {prog_name} watermark <input.png/bmp> <output.png/bmp> \"Watermark Text\"")
+    print(f"  python {prog_name} verify <watermarked.png/bmp> \"Watermark Text\"")
+    print(f"  python {prog_name} analyze <watermarked.png/bmp>")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -216,29 +395,7 @@ if __name__ == "__main__":
 
     mode = sys.argv[1].lower()
     
-    
-    if mode == "encode":
-        if len(sys.argv) != 5:
-            print("Error: Argumen encode kurang.")
-            print_usage(sys.argv[0])
-            sys.exit(1)
-        
-        input_file = sys.argv[2]
-        output_file = sys.argv[3]
-        message = sys.argv[4]
-        
-        encode_image(input_file, output_file, message)
-    
-    elif mode == "decode":
-        if len(sys.argv) != 3:
-            print("Error: Argumen decode kurang.")
-            print_usage(sys.argv[0])
-            sys.exit(1)
-            
-        input_file = sys.argv[2]
-        decode_image(input_file)
-
-    elif mode == "capacity": 
+    if mode == "capacity": 
         if len(sys.argv) != 3:
             print("Error: Argumen capacity kurang.")
             print_usage(sys.argv[0])
@@ -250,7 +407,44 @@ if __name__ == "__main__":
         print("\n=== Analisis Kapasitas Steganografi ===")
         print(f"File Sumber: {input_file}")
         print(f"Kapasitas Maksimal (Karakter): {max_chars} karakter")
+        print(f"Kapasitas Maksimal (Bit): {max_chars * 8} bit")
         print("======================================\n")
+    
+    elif mode == "watermark":
+        if len(sys.argv) != 5:
+            print("Error: Argumen watermark kurang.")
+            print_usage(sys.argv[0])
+            sys.exit(1)
+            
+        input_file = sys.argv[2]
+        output_file = sys.argv[3]
+        watermark_text = sys.argv[4]
+        
+        original_hash = embed_watermark(input_file, output_file, watermark_text)
+        if original_hash:
+            print(f"\n=== Watermark Berhasil Ditambahkan ===")
+            print(f"Hash asli (simpan untuk verifikasi): {original_hash}")
+            print("=======================================\n")
+    
+    elif mode == "verify":
+        if len(sys.argv) != 4:
+            print("Error: Argumen verify kurang.")
+            print_usage(sys.argv[0])
+            sys.exit(1)
+            
+        input_file = sys.argv[2]
+        watermark_text = sys.argv[3]
+        
+        verify_watermark_comprehensive(input_file, watermark_text)
+    
+    elif mode == "analyze":
+        if len(sys.argv) != 3:
+            print("Error: Argumen analyze kurang.")
+            print_usage(sys.argv[0])
+            sys.exit(1)
+            
+        input_file = sys.argv[2]
+        analyze_watermark_integrity(input_file)
 
     else:
         print_usage(sys.argv[0])
