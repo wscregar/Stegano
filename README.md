@@ -1,8 +1,10 @@
-# Steganography - Simple BMP Steganography (LSB Method)
+# Steganography - Invisible Copyright Protection
 
-Project ini adalah implementasi sederhana dari teknik Steganografi Gambar menggunakan metode Least Significant Bit (LSB) dengan bahasa pemrograman C++. Alat ini memungkinkan Anda menyembunyikan pesan teks rahasia ke dalam file gambar berformat .bmp (Bitmap) tanpa mengubah tampilan visual gambar tersebut secara kasat mata.
+Project ini adalah implementasi modern dari teknik **Steganografi Gambar** menggunakan metode *Least Significant Bit* (LSB) dikombinasikan dengan keamanan hash **SHA-512**. 
 
-## Konsep LSB (Least Significant Bit)
+Dibangun menggunakan **Python** dan framework **Streamlit**, tools ini menyembunyikan tanda tangan digital (watermark) ke dalam file gambar tanpa mengubah tampilan visualnya secara kasat mata.
+
+## Konsep Simple BMP Steganography (LSB Method)
 
 Project ini menggunakan metode LSB, teknik yang paling umum dan mendasar dalam steganografi gambar. Berikut cara kerjanya:
 
@@ -24,30 +26,59 @@ Kesimpulan:
 
 Mata manusia tidak dapat membedakan perubahan warna dari nilai 200 menjadi 201. Perbedaan ini tidak terlihat (invisible), namun data biner di dalamnya telah berubah dan menyimpan pesan kita.
 
+## Konsep SHA-512 Hashing
+
+Tidak seperti steganografi biasa yang menyisipkan teks mentah, program ini mengubah teks hak cipta menjadi pola hash SHA-512 yang unik dan menyebarkannya ke seluruh permukaan gambar. Ini memastikan integritas data yang lebih tinggi.
+
 ## Cara Menjalankan
 
-1. Kompilasi Kode
+### 1. Prerequisites
+Pastikan PC kita memiliki:
+* **Python** (versi 3.8 atau lebih baru).
+* File Program: Pastikan `app.py` dan `watermark_tools.py` berada dalam satu folder.
 
-Buka terminal di folder project dan jalankan perintah berikut untuk mengkompilasi kode:
+### 2. Instalasi Library
+Buka terminal atau Command Prompt (CMD) di folder project, lalu jalankan perintah berikut:
 
-    g++ -o stego Image-LSB.cpp
+```bash
+pip install streamlit pillow
+```
 
-2. Menyembunyikan Pesan (Encode)
+### 3. Menjalankan Aplikasi
+```bash
+python -m streamlit run app.py
+```
 
-Gunakan mode encode untuk menyisipkan pesan.
-Format:
-`./stego.exe encode <input.bmp> <output.bmp> "Pesan Rahasia"`
+### 4. Panduan Penggunaan
 
-Contoh:
+Aplikasi memiliki navigasi menu di sebelah kiri (Sidebar):
 
-    ./stego.exe encode image.bmp result.bmp "This is Secret"
+### A. Mode Proteksi (Encode)
 
-3. Membaca Pesan (Decode)
+* Pilih menu "🛡️ Proteksi (Watermark)".
 
-Gunakan mode decode untuk mengekstrak pesan dari gambar yang sudah disisipi.
-Format:
-`./stego.exe decode <gambar_rahasia.bmp>`
+* Upload gambar asli (.png/.bmp).
 
-Contoh:
+* Ketik pesan rahasia/copyright di kolom teks.
 
-    ./stego.exe decode result.bmp
+* Klik tombol "Proses Watermark".
+
+* Download gambar hasil watermark.
+
+### B. Mode Verifikasi (Decode)
+
+* Pilih menu "Verifikasi".
+
+* Upload gambar yang sudah diproteksi.
+
+* Masukkan teks/password yang sama persis dengan saat proses enkripsi.
+
+* Klik "Verifikasi Watermark" untuk membuktikan kepemilikan.
+
+### C. Mode Analisis 
+
+* Pilih menu "Analisis Integritas".
+
+* Upload gambar apa saja.
+
+* Klik "Jalankan Analisis" untuk mengecek apakah gambar tersebut konsisten atau pernah diedit (crop/manipulasi) tanpa perlu mengetahui passwordnya.
