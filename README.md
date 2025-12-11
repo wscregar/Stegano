@@ -55,7 +55,7 @@ Aplikasi memiliki navigasi menu di sebelah kiri (Sidebar):
 
 ### A. Mode Proteksi (Encode)
 
-* Pilih menu "🛡️ Proteksi (Watermark)".
+* Pilih menu "Watermark".
 
 * Upload gambar asli (.png/.bmp).
 
