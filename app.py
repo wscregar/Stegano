@@ -66,7 +66,7 @@ def save_uploaded_file(uploaded_file):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.title("Digital Guardian")
+    st.title("Invisi-Mark")
     st.markdown("---")
     menu = st.radio(
         "Pilih Operasi:",
@@ -194,3 +194,4 @@ elif menu == "📊 Analisis Integritas":
                     st.text_area("Log Analisis Detail", output, height=300)
                 except AttributeError:
                     st.error("Fungsi 'analyze_watermark_integrity' tidak ditemukan.")
+
