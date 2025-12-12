@@ -15,33 +15,32 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSS FIX (AGAR TEXT HITAM DAN TERLIHAT) ---
 st.markdown("""
 <style>
-    /* Paksa Background jadi Putih */
-    .stApp {
-        background-color: #ffffff;
+    .stApp { background-color: #5D5D6E; color: #ffffff; }
+    .stMarkdown, .stText, p, h1, h2, h3, h4, h5, h6, li, span, label,
+    [data-testid="stMarkdownContainer"] * {
+        color: #ffffff !important;
     }
-    
-    /* Paksa semua teks dasar berwarna hitam */
-    .stMarkdown, .stText, p, h1, h2, h3, h4, h5, h6, li, span, label {
+
+
+    .stTextInput input, .stTextArea textarea {
         color: #000000 !important;
+        background-color: #f0f2f6 !important;
     }
 
-    /* Memperbaiki warna input text agar terlihat */
-    .stTextInput > div > div > input {
-        color: #000000;
-        background-color: #f0f2f6;
-    }
-
-    /* Tombol Style */
-    .stButton>button {
+    /* Tombol: gunakan selector stabil + paksa warna */
+    .stButton>button, button[kind="primary"], button[kind="secondary"] {
         width: 100%;
         border-radius: 5px;
         height: 3em;
-        background-color: #4CAF50;
-        color: white !important;
-        border: none;
+        background: #4CAF50 !important;
+        color: #ffffff !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    .stButton>button:hover, button[kind="primary"]:hover, button[kind="secondary"]:hover {
+        background: #45a049 !important;
     }
     
     /* Style untuk area log/code */
@@ -51,9 +50,7 @@ st.markdown("""
     }
     
     /* Peringatan error/sukses */
-    .stAlert {
-        color: #000000 !important;
-    }
+    .stAlert { color: #000000 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -90,9 +87,8 @@ if menu == "🛡️ Proteksi (Watermark)":
         
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
-        # FIX: Menggunakan use_column_width (bukan container_width)
         with col1:
-            st.image(image, caption="Gambar Asli", use_column_width=True)
+            st.image(image, caption="Gambar Asli", use_container_width=True)
             
         temp_input_path = save_uploaded_file(uploaded_file)
         
@@ -121,7 +117,7 @@ if menu == "🛡️ Proteksi (Watermark)":
                                 st.code(f"SHA-512 Hash: {original_hash}", language="text")
                                 
                                 protected_image = Image.open(output_path)
-                                st.image(protected_image, caption="Gambar Terproteksi", use_column_width=True)
+                                st.image(protected_image, caption="Gambar Terproteksi", use_container_width=True)
                                 
                                 with open(output_path, "rb") as file:
                                     st.download_button(
